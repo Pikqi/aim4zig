@@ -43,6 +43,15 @@ fn ray_main() !void {
     ray.InitWindow(width, height, "aim4zig");
     defer ray.CloseWindow();
 
+    // SOUND
+    ray.InitAudioDevice();
+    defer ray.CloseAudioDevice();
+
+    const hit_sound = ray.LoadSound("res/laser.wav");
+    defer ray.UnloadSound(hit_sound);
+    const fail_sound = ray.LoadSound("res/explosion.wav");
+    defer ray.UnloadSound(fail_sound);
+
     var gpa = std.heap.GeneralPurposeAllocator(.{ .stack_trace_frames = 8 }){};
     const allocator = gpa.allocator();
     defer {
@@ -96,6 +105,7 @@ fn ray_main() !void {
                 if (time - circle.timeCreated >= time_alive) {
                     _ = list.swapRemove(i);
                     health -= 1;
+                    ray.PlaySound(fail_sound);
                     if (health < 1) {
                         ray.CloseWindow();
                     }
@@ -107,6 +117,7 @@ fn ray_main() !void {
                         if (@abs(mousePosition.y - @as(f64, @floatFromInt(circle.pos.y))) < r) {
                             _ = list.swapRemove(i);
                             score += 1;
+                            ray.PlaySound(hit_sound);
                             continue;
                         }
                     }
