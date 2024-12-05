@@ -16,6 +16,9 @@ const time_alive = 4;
 const min_time_spawn = 0.2;
 const spaw_time_rng_factor = 0.3;
 const spawn_border = 50;
+const max_health = 3;
+
+const list_capacity = 20;
 
 const Circle = struct {
     pos: Position,
@@ -39,7 +42,7 @@ fn ray_main() !void {
     const width = 800;
     const height = 450;
 
-    // ray.setConfigFlags(ray.ConfigFlags. | ray.FLAG_VSYNC_HINT);
+    ray.setConfigFlags(ray.ConfigFlags{ .msaa_4x_hint = true, .vsync_hint = true });
     ray.initWindow(width, height, "aim4zig");
     defer ray.closeWindow();
 
@@ -64,22 +67,25 @@ fn ray_main() !void {
     //     }
     // }
 
-    var list = std.ArrayList(Circle).init(allocator);
+    var list = try std.ArrayList(Circle).initCapacity(allocator, list_capacity);
     try list.append(.{ .timeCreated = ray.getTime(), .pos = .{ .x = 100, .y = 200 } });
     var mousePosition = ray.getMousePosition();
     var mouseClicked = false;
     // Player state
     var score: u16 = 0;
-    var health: u2 = 3;
+    var health: u2 = max_health;
+    var gameStarted: bool = false;
+    var gameOver: bool = false;
 
     while (!ray.windowShouldClose()) {
+        mouseClicked = false;
         if (ray.isMouseButtonPressed(ray.MouseButton.mouse_button_left)) {
             mouseClicked = true;
             mousePosition = ray.getMousePosition();
         }
         const time = ray.getTime();
 
-        if (nextSpawn < time) {
+        if (nextSpawn < time and !gameOver) {
             try list.append(.{ .timeCreated = ray.getTime(), .pos = .{ .x = rand.intRangeAtMost(i32, spawn_border, width - spawn_border), .y = rand.intRangeAtMost(i32, spawn_border, height - spawn_border) } });
 
             nextSpawn = time + rand.float(f64) * spaw_time_rng_factor + min_time_spawn;
@@ -90,10 +96,31 @@ fn ray_main() !void {
             defer ray.endDrawing();
 
             ray.clearBackground(ray.Color.white);
+
+            if (!gameStarted) {
+                ray.drawText("Click to start", spawn_border, spawn_border, 25, ray.Color.black);
+                if (mouseClicked) {
+                    gameStarted = true;
+                    health = max_health;
+                }
+                continue;
+            }
+            if (gameOver) {
+                const gameOverText = try std.fmt.allocPrintZ(allocator, "Your score was: {d}, try again?", .{score});
+                ray.drawText(gameOverText, spawn_border, spawn_border, 25, ray.Color.black);
+                allocator.free(gameOverText);
+                if (mouseClicked) {
+                    gameOver = false;
+                    health = max_health;
+                    score = 0;
+                }
+                continue;
+            }
+
             const scoreText = try std.fmt.allocPrintZ(allocator, "Score: {d}", .{score});
-            defer allocator.free(scoreText);
 
             ray.drawText(scoreText, spawn_border, spawn_border, 25, ray.Color.black);
+            allocator.free(scoreText);
 
             ray.drawFPS(width - 100, 10);
 
@@ -109,7 +136,9 @@ fn ray_main() !void {
                     health -= 1;
                     ray.playSound(fail_sound);
                     if (health < 1) {
-                        ray.closeWindow();
+                        list.clearRetainingCapacity();
+                        gameOver = true;
+                        break;
                     }
                     continue;
                 }
@@ -124,7 +153,7 @@ fn ray_main() !void {
                         }
                     }
                 }
-                ray.drawCircle(circle.pos.x, circle.pos.y, r, ray.Color.red);
+                ray.drawCircle(circle.pos.x, circle.pos.y, r, ray.Color.orange);
             }
         }
     }
