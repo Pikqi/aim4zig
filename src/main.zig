@@ -3,11 +3,35 @@ const ray = @import("raylib.zig");
 
 pub fn main() !void {
     try ray_main();
-    try old_main(); // remove this if you don't need it
-    try hints();
 }
 
+const Position = struct {
+    x: i32,
+    y: i32,
+};
+
+const radius = 50;
+const time_alive = 4;
+const min_time_spawn = 0.2;
+const spaw_time_rng_factor = 0.3;
+const spawn_border = 50;
+
+const Circle = struct {
+    pos: Position,
+    timeCreated: f64,
+};
+
+var nextSpawn: f64 = 0;
 fn ray_main() !void {
+
+    // RNG
+    var prng = std.rand.DefaultPrng.init(blk: {
+        var seed: u64 = undefined;
+        try std.posix.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+    const rand = prng.random();
+
     // const monitor = ray.GetCurrentMonitor();
     // const width = ray.GetMonitorWidth(monitor);
     // const height = ray.GetMonitorHeight(monitor);
@@ -27,78 +51,56 @@ fn ray_main() !void {
         }
     }
 
-    const colors = [_]ray.Color{ ray.GRAY, ray.RED, ray.GOLD, ray.LIME, ray.BLUE, ray.VIOLET, ray.BROWN };
-    const colors_len: i32 = @intCast(colors.len);
-    var current_color: i32 = 2;
-    var hint = true;
+    var list = std.ArrayList(Circle).init(allocator);
+    try list.append(.{ .timeCreated = ray.GetTime(), .pos = .{ .x = 100, .y = 200 } });
+    var mousePosition = ray.GetMousePosition();
+    var mouseClicked = false;
 
     while (!ray.WindowShouldClose()) {
-        // input
-        var delta: i2 = 0;
-        if (ray.IsKeyPressed(ray.KEY_UP)) delta += 1;
-        if (ray.IsKeyPressed(ray.KEY_DOWN)) delta -= 1;
-        if (delta != 0) {
-            current_color = @mod(current_color + delta, colors_len);
-            hint = false;
+        if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT)) {
+            mouseClicked = true;
+            mousePosition = ray.GetMousePosition();
         }
+        const time = ray.GetTime();
 
+        if (nextSpawn < time) {
+            try list.append(.{ .timeCreated = ray.GetTime(), .pos = .{ .x = rand.intRangeAtMost(i32, spawn_border, width - spawn_border), .y = rand.intRangeAtMost(i32, spawn_border, height - spawn_border) } });
+
+            nextSpawn = time + rand.float(f64) * spaw_time_rng_factor + min_time_spawn;
+        }
         // draw
         {
             ray.BeginDrawing();
             defer ray.EndDrawing();
 
-            ray.ClearBackground(colors[@intCast(current_color)]);
-            if (hint) ray.DrawText("press up or down arrow to change background color", 120, 140, 20, ray.BLUE);
-            ray.DrawText("Congrats! You created your first window!", 190, 200, 20, ray.BLACK);
-
-            // now lets use an allocator to create some dynamic text
-            // pay attention to the Z in `allocPrintZ` that is a convention
-            // for functions that return zero terminated strings
-            const seconds: u32 = @intFromFloat(ray.GetTime());
-            const dynamic = try std.fmt.allocPrintZ(allocator, "running since {d} seconds", .{seconds});
-            defer allocator.free(dynamic);
-            ray.DrawText(dynamic, 300, 250, 20, ray.WHITE);
+            ray.ClearBackground(ray.WHITE);
 
             ray.DrawFPS(width - 100, 10);
+            for (list.items, 0..) |circle, i| {
+                if (time - circle.timeCreated >= time_alive) {
+                    _ = list.swapRemove(i);
+                    continue;
+                }
+                const r: f32 = get_radius(time, circle.timeCreated, radius);
+                if (mouseClicked) {
+                    if (@abs(mousePosition.x - @as(f64, @floatFromInt(circle.pos.x))) < r) {
+                        if (@abs(mousePosition.y - @as(f64, @floatFromInt(circle.pos.y))) < r) {
+                            _ = list.swapRemove(i);
+                            continue;
+                        }
+                    }
+                }
+                std.log.debug("{d} {d} {d}\n", .{ time, circle.timeCreated, r });
+                ray.DrawCircle(circle.pos.x, circle.pos.y, r, ray.RED);
+            }
         }
     }
 }
 
-// remove this function if you don't need it
-fn old_main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // don't forget to flush!
-}
-
-fn hints() !void {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    try stdout.print("\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n", .{});
-    try stdout.print("Here are some hints:\n", .{});
-    try stdout.print("Run `zig build --help` to see all the options\n", .{});
-    try stdout.print("Run `zig build -Doptimize=ReleaseSmall` for a small release build\n", .{});
-    try stdout.print("Run `zig build -Doptimize=ReleaseSmall -Dstrip=true` for a smaller release build, that strips symbols\n", .{});
-    try stdout.print("Run `zig build -Draylib-optimize=ReleaseFast` for a debug build of your application, that uses a fast release of raylib (if you are only debugging your code)\n", .{});
-
-    try bw.flush(); // don't forget to flush!
-}
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+fn get_radius(currTime: f64, timeCreated: f64, maxRadius: comptime_int) f32 {
+    const asc: bool = currTime - timeCreated < time_alive / 2;
+    if (asc) {
+        return @as(f32, @floatCast((currTime - timeCreated) / @as(f32, @floatFromInt(time_alive / 2)))) * maxRadius;
+    }
+    return @as(f32, @floatFromInt(time_alive / 2)) / @as(f32, @floatCast((currTime - timeCreated))) * maxRadius;
 }
