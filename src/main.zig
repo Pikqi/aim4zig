@@ -11,6 +11,7 @@ const Position = struct {
 };
 
 const radius = 50;
+const health_radius = 20;
 const time_alive = 4;
 const min_time_spawn = 0.2;
 const spaw_time_rng_factor = 0.3;
@@ -39,7 +40,7 @@ fn ray_main() !void {
     const height = 450;
 
     ray.SetConfigFlags(ray.FLAG_MSAA_4X_HINT | ray.FLAG_VSYNC_HINT);
-    ray.InitWindow(width, height, "zig raylib example");
+    ray.InitWindow(width, height, "aim4zig");
     defer ray.CloseWindow();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{ .stack_trace_frames = 8 }){};
@@ -55,6 +56,9 @@ fn ray_main() !void {
     try list.append(.{ .timeCreated = ray.GetTime(), .pos = .{ .x = 100, .y = 200 } });
     var mousePosition = ray.GetMousePosition();
     var mouseClicked = false;
+    // Player state
+    var score: u16 = 0;
+    var health: u2 = 3;
 
     while (!ray.WindowShouldClose()) {
         if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT)) {
@@ -74,11 +78,27 @@ fn ray_main() !void {
             defer ray.EndDrawing();
 
             ray.ClearBackground(ray.WHITE);
+            const scoreText = try std.fmt.allocPrintZ(allocator, "Score: {d}", .{score});
+            defer allocator.free(scoreText);
+
+            ray.DrawText(scoreText, spawn_border, spawn_border, 25, ray.BLACK);
+            ray.DrawText(scoreText, spawn_border, spawn_border, 25, ray.BLACK);
 
             ray.DrawFPS(width - 100, 10);
+
+            // Health drawing
+            for (0..health) |i| {
+                ray.DrawCircle(spawn_border / 2 + @as(u16, @intCast(i)) * health_radius * 2, spawn_border / 2, health_radius, ray.RED);
+            }
+
+            // Circle drawing
             for (list.items, 0..) |circle, i| {
                 if (time - circle.timeCreated >= time_alive) {
                     _ = list.swapRemove(i);
+                    health -= 1;
+                    if (health < 1) {
+                        ray.CloseWindow();
+                    }
                     continue;
                 }
                 const r: f32 = get_radius(time, circle.timeCreated, radius);
@@ -86,11 +106,11 @@ fn ray_main() !void {
                     if (@abs(mousePosition.x - @as(f64, @floatFromInt(circle.pos.x))) < r) {
                         if (@abs(mousePosition.y - @as(f64, @floatFromInt(circle.pos.y))) < r) {
                             _ = list.swapRemove(i);
+                            score += 1;
                             continue;
                         }
                     }
                 }
-                std.log.debug("{d} {d} {d}\n", .{ time, circle.timeCreated, r });
                 ray.DrawCircle(circle.pos.x, circle.pos.y, r, ray.RED);
             }
         }
