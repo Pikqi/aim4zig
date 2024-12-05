@@ -1,5 +1,5 @@
 const std = @import("std");
-const ray = @import("raylib.zig");
+const ray = @import("raylib");
 
 pub fn main() !void {
     try ray_main();
@@ -39,65 +39,67 @@ fn ray_main() !void {
     const width = 800;
     const height = 450;
 
-    ray.SetConfigFlags(ray.FLAG_MSAA_4X_HINT | ray.FLAG_VSYNC_HINT);
-    ray.InitWindow(width, height, "aim4zig");
-    defer ray.CloseWindow();
+    // ray.setConfigFlags(ray.ConfigFlags. | ray.FLAG_VSYNC_HINT);
+    ray.initWindow(width, height, "aim4zig");
+    defer ray.closeWindow();
 
     // SOUND
-    ray.InitAudioDevice();
-    defer ray.CloseAudioDevice();
+    ray.initAudioDevice();
+    defer ray.closeAudioDevice();
 
-    const hit_sound = ray.LoadSound("res/laser.wav");
-    defer ray.UnloadSound(hit_sound);
-    const fail_sound = ray.LoadSound("res/explosion.wav");
-    defer ray.UnloadSound(fail_sound);
+    const hit_sound = ray.loadSound("res/laser.wav");
+    defer ray.unloadSound(hit_sound);
+    const fail_sound = ray.loadSound("res/explosion.wav");
+    defer ray.unloadSound(fail_sound);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .stack_trace_frames = 8 }){};
-    const allocator = gpa.allocator();
-    defer {
-        switch (gpa.deinit()) {
-            .leak => @panic("leaked memory"),
-            else => {},
-        }
-    }
+    // var gpa = std.heap.GeneralPurposeAllocator(.{ .stack_trace_frames = 8 }){};
+    // const allocator = gpa.allocator();
+    var buffer: [2048]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+    // defer {
+    //     switch (gpa.deinit()) {
+    //         .leak => @panic("leaked memory"),
+    //         else => {},
+    //     }
+    // }
 
     var list = std.ArrayList(Circle).init(allocator);
-    try list.append(.{ .timeCreated = ray.GetTime(), .pos = .{ .x = 100, .y = 200 } });
-    var mousePosition = ray.GetMousePosition();
+    try list.append(.{ .timeCreated = ray.getTime(), .pos = .{ .x = 100, .y = 200 } });
+    var mousePosition = ray.getMousePosition();
     var mouseClicked = false;
     // Player state
     var score: u16 = 0;
     var health: u2 = 3;
 
-    while (!ray.WindowShouldClose()) {
-        if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT)) {
+    while (!ray.windowShouldClose()) {
+        if (ray.isMouseButtonPressed(ray.MouseButton.mouse_button_left)) {
             mouseClicked = true;
-            mousePosition = ray.GetMousePosition();
+            mousePosition = ray.getMousePosition();
         }
-        const time = ray.GetTime();
+        const time = ray.getTime();
 
         if (nextSpawn < time) {
-            try list.append(.{ .timeCreated = ray.GetTime(), .pos = .{ .x = rand.intRangeAtMost(i32, spawn_border, width - spawn_border), .y = rand.intRangeAtMost(i32, spawn_border, height - spawn_border) } });
+            try list.append(.{ .timeCreated = ray.getTime(), .pos = .{ .x = rand.intRangeAtMost(i32, spawn_border, width - spawn_border), .y = rand.intRangeAtMost(i32, spawn_border, height - spawn_border) } });
 
             nextSpawn = time + rand.float(f64) * spaw_time_rng_factor + min_time_spawn;
         }
         // draw
         {
-            ray.BeginDrawing();
-            defer ray.EndDrawing();
+            ray.beginDrawing();
+            defer ray.endDrawing();
 
-            ray.ClearBackground(ray.WHITE);
+            ray.clearBackground(ray.Color.white);
             const scoreText = try std.fmt.allocPrintZ(allocator, "Score: {d}", .{score});
             defer allocator.free(scoreText);
 
-            ray.DrawText(scoreText, spawn_border, spawn_border, 25, ray.BLACK);
-            ray.DrawText(scoreText, spawn_border, spawn_border, 25, ray.BLACK);
+            ray.drawText(scoreText, spawn_border, spawn_border, 25, ray.Color.black);
 
-            ray.DrawFPS(width - 100, 10);
+            ray.drawFPS(width - 100, 10);
 
             // Health drawing
             for (0..health) |i| {
-                ray.DrawCircle(spawn_border / 2 + @as(u16, @intCast(i)) * health_radius * 2, spawn_border / 2, health_radius, ray.RED);
+                ray.drawCircle(spawn_border / 2 + @as(u16, @intCast(i)) * health_radius * 2, spawn_border / 2, health_radius, ray.Color.red);
             }
 
             // Circle drawing
@@ -105,9 +107,9 @@ fn ray_main() !void {
                 if (time - circle.timeCreated >= time_alive) {
                     _ = list.swapRemove(i);
                     health -= 1;
-                    ray.PlaySound(fail_sound);
+                    ray.playSound(fail_sound);
                     if (health < 1) {
-                        ray.CloseWindow();
+                        ray.closeWindow();
                     }
                     continue;
                 }
@@ -117,12 +119,12 @@ fn ray_main() !void {
                         if (@abs(mousePosition.y - @as(f64, @floatFromInt(circle.pos.y))) < r) {
                             _ = list.swapRemove(i);
                             score += 1;
-                            ray.PlaySound(hit_sound);
+                            ray.playSound(hit_sound);
                             continue;
                         }
                     }
                 }
-                ray.DrawCircle(circle.pos.x, circle.pos.y, r, ray.RED);
+                ray.drawCircle(circle.pos.x, circle.pos.y, r, ray.Color.red);
             }
         }
     }
