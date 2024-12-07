@@ -68,7 +68,6 @@ fn ray_main() !void {
     // }
 
     var list = try std.ArrayList(Circle).initCapacity(allocator, list_capacity);
-    try list.append(.{ .timeCreated = ray.getTime(), .pos = .{ .x = 100, .y = 200 } });
     var mousePosition = ray.getMousePosition();
     var mouseClicked = false;
     // Player state
@@ -85,7 +84,7 @@ fn ray_main() !void {
         }
         const time = ray.getTime();
 
-        if (nextSpawn < time and !gameOver) {
+        if (nextSpawn < time and !gameOver and gameStarted) {
             try list.append(.{ .timeCreated = ray.getTime(), .pos = .{ .x = rand.intRangeAtMost(i32, spawn_border, width - spawn_border), .y = rand.intRangeAtMost(i32, spawn_border, height - spawn_border) } });
 
             nextSpawn = time + rand.float(f64) * spaw_time_rng_factor + min_time_spawn;
